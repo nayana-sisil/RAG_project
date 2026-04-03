@@ -5,7 +5,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.chains import RetrievalQA
-from huggingface_hub import HfFolder
 
 import gradio as gr
 
@@ -18,13 +17,12 @@ warnings.filterwarnings('ignore')
 
 def get_llm():
     pipe = pipeline(
-        "text-generation",
+        "text2text-generation",
         model="google/flan-t5-base",
         max_new_tokens=256
     )
     
-    llm = HuggingFacePipeline(pipeline=pipe)
-    return llm
+    return HuggingFacePipeline(pipeline=pipe)
 
 
 def document_loader(file):
@@ -62,6 +60,40 @@ def retriever(file):
     vectordb = vector_database(chunks)
     retriever = vectordb.as_retriever()
     return retriever
+
+
+def retriever_qa(file, query):
+    llm = get_llm()
+    retriever_obj = retriever(file)
+
+    qa = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=retriever_obj,
+        return_source_documents=False
+    )
+
+    response = qa.invoke(query)
+    return response['result']
+
+
+#interface
+
+rag_application = gr.Interface(
+    fn=retriever_qa,
+    allow_flagging="never",
+    inputs=[
+        gr.File(label="Upload PDF File", file_count="single", file_types=['.pdf'], type="filepath"),
+        gr.Textbox(label="Input Query", lines=2, placeholder="Type your question here...")
+    ],
+    outputs=gr.Textbox(label="Answer"),
+    title="PDF QA Bot (Hugging Face)",
+    description="Upload a PDF document and ask any question. The chatbot will try to answer using the provided document."
+)
+
+
+if __name__ == "__main__":
+    rag_application.launch(share=True)
 
 
 
